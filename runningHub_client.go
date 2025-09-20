@@ -66,7 +66,8 @@ func (r *Client) GetAccountStatus() (res *RunningHubAccountSuccessResponseData, 
 		return nil, err
 	}
 	if !response.OK() {
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成状态时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）", response.Code)
+		responseJson, _ := json.Marshal(response)
+		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
 		return nil, err
 	}
 	if err := json.Unmarshal(response.Data, &res); err != nil {
@@ -102,7 +103,8 @@ func (r *Client) CreateTask(payloadData *CreateTaskRequestInfo) (res *RunningHub
 	var response *RunningHubCreateTaskSuccessResponse
 	json.Unmarshal(body, &response)
 	if response.Code != 0 {
-		err = gerror.NewCodef(gcode.New(-1, "在第三方创建任务时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）", response.Code)
+		responseJson, _ := json.Marshal(response)
+		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
 		return nil, err
 	}
 	return response.Data, nil
@@ -172,7 +174,8 @@ func (r *Client) GetTaskResult(taskId string) (res []*RunningHubGetTaskResultSuc
 		return nil, err
 	}
 	if !response.OK() {
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）", response.Code)
+		responseJson, _ := json.Marshal(response)
+		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
 		return nil, err
 	}
 	if err := json.Unmarshal(response.Data, &res); err != nil {
@@ -211,7 +214,8 @@ func (r *Client) CancelTask(taskId string) (err error) {
 		return err
 	}
 	if !response.OK() {
-		err = gerror.NewCodef(gcode.New(-1, "取消任务时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）", response.Code)
+		responseJson, _ := json.Marshal(response)
+		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
 		return err
 	}
 	return nil
