@@ -57,14 +57,14 @@ type GetTaskStatusAndResultRes struct {
 	Code         int                                   `json:"code"`
 	Msg          string                                `json:"msg"`
 	SuccessItems []*SuccessOfGetTaskResultResponseData `json:"success_items"`
-	FailedReason *FailedOfGetTaskResultResponseData    `json:"failed_reason"`
+	FailedReason *FailedReason                         `json:"failed_reason"`
 }
 
 type GetTaskResultRes struct {
 	Code         int                                   `json:"code"`
 	Msg          string                                `json:"msg"`
 	SuccessItems []*SuccessOfGetTaskResultResponseData `json:"success_items"`
-	FailedReason *FailedOfGetTaskResultResponseData    `json:"failed_reason"`
+	FailedReason *FailedReason                         `json:"failed_reason"`
 }
 
 // SuccessOfGetTaskResultResponseData 获取任务结果成功响应
