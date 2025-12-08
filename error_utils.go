@@ -144,11 +144,11 @@ var errorInfoMap = map[int]errorInfo{
 	},
 }
 
-func GetErrorInfo(code int, failReason *FailedOfGetTaskResultResponseData) (res *ErrorInfo) {
+func GetErrorInfo(code int, failReason *FailedReason) (res *ErrorInfo) {
 	res = &ErrorInfo{
 		Code:         code,
 		SubCode:      code,
-		FailedReason: failReason.FailedReason,
+		FailedReason: failReason,
 	}
 	if code == 805 {
 		res.Msg = "任务状态异常"
@@ -169,7 +169,7 @@ func GetErrorInfo(code int, failReason *FailedOfGetTaskResultResponseData) (res 
 		res.Msg = value.Msg
 		return res
 	}
-	res.Msg = failReason.FailedReason.TraceBack
-	res.Sign = failReason.FailedReason.ExceptionMessage
+	res.Msg = failReason.TraceBack
+	res.Sign = failReason.ExceptionMessage
 	return res
 }
