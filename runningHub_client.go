@@ -3,220 +3,213 @@ package runninghub_tools
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"fmt"
 	"log"
+	"net/http"
 	"time"
 
-	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/gclient"
 )
 
-var (
-	statusOK = 200
+const (
+	getAccountStatus = "/uc/openapi/accountStatus"
+	getTaskStatus    = "/task/openapi/status"
+	createTask       = "/task/openapi/create"
+	getTaskResult    = "/task/openapi/outputs"
+	cancelTask       = "/task/openapi/cancel"
 )
 
-type Client struct {
-	ApiKey string `json:"api_key"`
+type RunningHubClient struct {
+	url        string
+	ApiKey     string `json:"api_key"`
+	httpClient *gclient.Client
 }
 
-func NewClient(apiKey string) *Client {
-	return &Client{
-		ApiKey: apiKey,
+func NewClient(in *RunningHubClientConfig) *RunningHubClient {
+	if in.Host == "" {
+		in.Host = "www.runninghub.cn"
+	}
+	protocol := "https"
+	if in.UseHttpReq {
+		protocol = "http"
+	}
+	url := fmt.Sprintf("%s://%s", protocol, in.Host)
+	return &RunningHubClient{
+		ApiKey: in.ApiKey,
+		url:    url,
+		httpClient: g.Client().
+			SetTimeout(60*time.Second).
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Host", in.Host),
 	}
 }
 
-func (r *Client) doPost(url string, reqBody []byte) (resp *gclient.Response, err error) {
-	resp, err = g.Client().
-		SetTimeout(60*time.Second).
-		Header(map[string]string{"Content-Type": "application/json", "Host": "www.runninghub.cn"}).
-		Post(context.Background(), url, reqBody)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-// 获取api账户信息
-func (r *Client) GetAccountStatus() (res *RunningHubAccountSuccessResponseData, err error) {
-	res = &RunningHubAccountSuccessResponseData{
-		CurrentTaskCounts: "0",
-		RemainCoins:       "0",
-	}
-	url := "https://www.runninghub.cn/uc/openapi/accountStatus"
-	payloadData := map[string]string{
-		"apikey": r.ApiKey,
-	}
-
-	reqBody, _ := json.Marshal(payloadData)
-
-	resp, err := r.doPost(url, reqBody)
+func (c *RunningHubClient) doPost(ctx context.Context, url string, reqBody []byte) (res *RunningHubResponse, err error) {
+	httpClient := c.httpClient.Clone()
+	resp, err := httpClient.Post(ctx, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Close()
 
 	// 检查响应状态码
-	if resp.StatusCode != statusOK {
+	if resp.StatusCode != http.StatusOK {
 		return nil, gerror.Newf("unexpected status code: %d", resp.StatusCode)
 	}
-	var response *RunningHubResponse[json.RawMessage]
+	var response *RunningHubResponse
 	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
-	if !response.OK() {
-		responseJson, _ := json.Marshal(response)
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
+	return response, nil
+}
+
+// GetAccountStatus 获取api账户信息
+func (c *RunningHubClient) GetAccountStatus(ctx context.Context) (res *GetAccountRes, err error) {
+	url := fmt.Sprintf("%s%s", c.url, getAccountStatus)
+	reqBody, _ := json.Marshal(g.Map{
+		"apikey": c.ApiKey,
+	})
+	resp, err := c.doPost(ctx, url, reqBody)
+	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(response.Data, &res); err != nil {
-		return nil, err
+	if resp.Code != 0 {
+		return nil, gerror.Newf("GetAccountStatus fail, code: %d, msg: %s", resp.Code, resp.Msg)
+	}
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
 	return res, nil
 }
 
-func (r *Client) CreateTask(payloadData *CreateTaskRequestInfo) (res *RunningHubCreateTaskSuccessResponseData, err error) {
-	res = &RunningHubCreateTaskSuccessResponseData{}
-	if payloadData == nil {
-		return nil, gerror.New("Running Create Task Request`s Payload data cannot be empty")
+// CreateTask 创建任务
+func (c *RunningHubClient) CreateTask(ctx context.Context, payloadData *CreateTaskReq) (res *CreateTaskRes, err error) {
+	if payloadData == nil || payloadData.WorkflowId == "" || len(payloadData.NodeInfoList) == 0 {
+		return nil, gerror.New("Running Create Task Request`s Payload data params of WorkflowId and NodeInfoList must be not empty")
 	}
-	url := "https://www.runninghub.cn/task/openapi/create"
-	payloadData.ApiKey = r.ApiKey
+	url := fmt.Sprintf("%s%s", c.url, createTask)
+	payloadData.ApiKey = c.ApiKey
 	reqBody, _ := json.Marshal(payloadData)
-	resp, err := r.doPost(url, reqBody)
+
+	resp, err := c.doPost(ctx, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Close()
-
-	// 检查响应状态码
-	if resp.StatusCode != statusOK {
-		return nil, gerror.Newf("unexpected status code: %d", resp.StatusCode)
+	if resp.Code != 0 {
+		return nil, gerror.Newf("CreateTask fail, code: %d, msg: %s", resp.Code, resp.Msg)
 	}
-
-	// 读取响应体
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
-	var response *RunningHubCreateTaskSuccessResponse
-	json.Unmarshal(body, &response)
-	if response.Code != 0 {
-		responseJson, _ := json.Marshal(response)
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
-		return nil, err
-	}
-	return response.Data, nil
+	return res, nil
 }
 
-// 获取任务状态
-func (r *Client) GetTaskStatus(taskId string) (res string) {
+// GetTaskStatus 获取任务状态
+func (c *RunningHubClient) GetTaskStatus(ctx context.Context, taskId string) (res string, err error) {
 	if taskId == "" {
-		log.Fatal("task_id cannot be empty")
+		return "", gerror.New("task_id cannot be empty")
 	}
-	url := "https://www.runninghub.cn/task/openapi/status"
-
-	// 准备请求数据
-	payloadData := map[string]string{
+	url := fmt.Sprintf("%s%s", c.url, getTaskStatus)
+	reqBody, _ := json.Marshal(g.Map{
 		"taskId": taskId,
-		"apiKey": r.ApiKey,
-	}
-
-	reqBody, _ := json.Marshal(payloadData)
-	resp, err := r.doPost(url, reqBody)
+		"apiKey": c.ApiKey,
+	})
+	resp, err := c.doPost(ctx, url, reqBody)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	defer resp.Close()
-
-	// 检查响应状态码
-	if resp.StatusCode != statusOK {
-		return ""
+	if resp.Code != 0 {
+		return "", gerror.Newf("GetTaskStatus fail, code: %d, msg: %s", resp.Code, resp.Msg)
 	}
-
-	var response *RunningHubResponse[json.RawMessage]
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return ""
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return "", fmt.Errorf("decode success data fail: %w", err)
 	}
-	if err := json.Unmarshal(response.Data, &res); err != nil {
-		return ""
-	}
-	return res
+	return res, nil
 }
 
-// 获取任务结果
-func (r *Client) GetTaskResult(taskId string) (res []*RunningHubGetTaskResultSuccessResponseData, err error) {
-	res = []*RunningHubGetTaskResultSuccessResponseData{}
+// GetTaskResult 获取任务结果
+func (c *RunningHubClient) GetTaskResult(ctx context.Context, taskId string) (res *GetTaskResultRes, err error) {
 	if taskId == "" {
-		log.Fatal("task_id cannot be empty")
+		return nil, gerror.New("task_id cannot be empty")
 	}
-	url := "https://www.runninghub.cn/task/openapi/outputs"
-	// 准备请求数据
-	payloadData := map[string]string{
+	url := fmt.Sprintf("%s%s", c.url, getTaskResult)
+	reqBody, _ := json.Marshal(g.Map{
 		"taskId": taskId,
-		"apiKey": r.ApiKey,
-	}
-
-	reqBody, _ := json.Marshal(payloadData)
-	resp, err := r.doPost(url, reqBody)
+		"apiKey": c.ApiKey,
+	})
+	resp, err := c.doPost(ctx, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Close()
-
-	// 检查响应状态码
-	if resp.StatusCode != statusOK {
-		return nil, gerror.Newf("unexpected status code: %d", resp.StatusCode)
+	res = &GetTaskResultRes{
+		SuccessItems: []*SuccessOfGetTaskResultResponseData{},
+		FailedReason: &FailedOfGetTaskResultResponseData{},
+		Code:         resp.Code,
+		Msg:          resp.Msg,
 	}
-	var response *RunningHubResponse[json.RawMessage]
-	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
+	if resp.Code == 0 {
+		if err := json.Unmarshal(resp.Data, &res.SuccessItems); err != nil {
+			return nil, fmt.Errorf("decode success data fail: %w", err)
+		}
+		return res, nil
 	}
-	if !response.OK() {
-		responseJson, _ := json.Marshal(response)
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
-		return nil, err
+	var failData struct {
+		FailedReason FailedOfGetTaskResultResponseData `json:"failedReason"`
 	}
-	if err := json.Unmarshal(response.Data, &res); err != nil {
-		return nil, err
+	if err := json.Unmarshal(resp.Data, &failData); err != nil {
+		return nil, fmt.Errorf("decode fail data fail: %w", err)
 	}
+	res.FailedReason = &failData.FailedReason
 	return res, nil
 }
 
 // 取消任务
-func (r *Client) CancelTask(taskId string) (err error) {
+func (c *RunningHubClient) CancelTask(ctx context.Context, taskId string) (err error) {
 	if taskId == "" {
 		log.Fatal("task_id cannot be empty")
 	}
-
-	url := "https://www.runninghub.cn/task/openapi/cancel"
-
-	// 准备请求数据
-	payloadData := map[string]string{
+	url := fmt.Sprintf("%s%s", c.url, cancelTask)
+	reqBody, _ := json.Marshal(g.Map{
 		"taskId": taskId,
-		"apiKey": r.ApiKey,
-	}
-
-	reqBody, _ := json.Marshal(payloadData)
-	resp, err := r.doPost(url, reqBody)
+		"apiKey": c.ApiKey,
+	})
+	resp, err := c.doPost(ctx, url, reqBody)
 	if err != nil {
 		return err
 	}
-	defer resp.Close()
-
-	// 检查响应状态码
-	if resp.StatusCode != statusOK {
-		return gerror.Newf("unexpected status code: %d", resp.StatusCode)
-	}
-	var response *RunningHubResponse[json.RawMessage]
-	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
-	}
-	if !response.OK() {
-		responseJson, _ := json.Marshal(response)
-		err = gerror.NewCodef(gcode.New(-1, "获取任务生成结果时发生错误", response), "请求的响应码不符合要求（应为0，实际为%d）, 错误详情: %s", response.Code, responseJson)
-		return err
+	if resp.Code != 0 {
+		return gerror.Newf("CancelTask fail, code: %d, msg: %s", resp.Code, resp.Msg)
 	}
 	return nil
+}
+
+// GetTaskStatusAndResult 获取任务状态和结果
+func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, taskId string) (res *GetTaskStatusAndResultRes, err error) {
+	if taskId == "" {
+		return nil, gerror.New("task_id cannot be empty")
+	}
+	status, err := c.GetTaskStatus(ctx, taskId)
+	if err != nil {
+		return nil, err
+	}
+	res = &GetTaskStatusAndResultRes{
+		Status: status,
+	}
+	switch status {
+	case "SUCCESS", "FAILED":
+		var result *GetTaskResultRes
+		result, err = c.GetTaskResult(ctx, taskId)
+		if err != nil {
+			return nil, err
+		}
+		res.Code = result.Code
+		res.Msg = result.Msg
+		res.SuccessItems = result.SuccessItems
+		res.FailedReason = result.FailedReason
+		return res, nil
+	default:
+		return res, nil
+	}
 }

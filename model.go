@@ -1,50 +1,35 @@
 package runninghub_tools
 
-type NodeInfo struct {
-	NodeId     string `json:"nodeId"`
-	FieldName  string `json:"fieldName"`
-	FieldValue string `json:"fieldValue"`
+import "encoding/json"
+
+type RunningHubClientConfig struct {
+	UseHttpReq bool   `json:"use_http_req"`
+	Host       string `json:"host"`
+	ApiKey     string `json:"api_key"`
 }
 
-type CreateTaskRequestInfo struct {
+// RunningHubResponse RunningHub 通用响应结构
+type RunningHubResponse struct {
+	Code          int             `json:"code"`
+	Msg           string          `json:"msg"`
+	ErrorMessages interface{}     `json:"errorMessages"`
+	Data          json.RawMessage `json:"data"`
+}
+
+type CreateTaskReq struct {
 	WorkflowId   string      `json:"workflowId"`
 	NodeInfoList []*NodeInfo `json:"nodeInfoList"`
 	ApiKey       string      `json:"apiKey"`
 	WebhookUrl   string      `json:"webhookUrl"`
 }
 
-// 获取账户信息响应
-type RunningHubAccountResponse struct {
-	ApiType           string  `json:"api_type"`
-	Currency          string  `json:"currency"`
-	CurrentTaskCounts int     `json:"current_task_counts"`
-	RemainCoins       float64 `json:"remain_coins"`
-	RemainMoney       float64 `json:"remain_money"`
+type NodeInfo struct {
+	NodeId     string `json:"nodeId"`
+	FieldName  string `json:"fieldName"`
+	FieldValue string `json:"fieldValue"`
 }
 
-// RunningHub 通用响应结构
-type RunningHubResponse[T any] struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data T      `json:"data"`
-}
-
-func (r RunningHubResponse[T]) OK() bool { return r.Code == 0 }
-
-// 获取账户信息成功响应数据
-type RunningHubAccountSuccessResponseData struct {
-	RemainCoins       string `json:"remainCoins"`
-	CurrentTaskCounts string `json:"currentTaskCounts"`
-}
-
-// 创建任务成功响应
-type RunningHubCreateTaskSuccessResponse struct {
-	Code int                                      `json:"code"`
-	Msg  string                                   `json:"msg"`
-	Data *RunningHubCreateTaskSuccessResponseData `json:"data"`
-}
-
-type RunningHubCreateTaskSuccessResponseData struct {
+type CreateTaskRes struct {
 	NetWssUrl  string `json:"netWssUrl"`
 	TaskId     string `json:"taskId"`
 	TaskStatus string `json:"taskStatus"`
@@ -52,23 +37,49 @@ type RunningHubCreateTaskSuccessResponseData struct {
 	PromptTips string `json:"promptTips"`
 }
 
-// 获取任务状态成功响应
-type RunningHubGetTaskStatusSuccessResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data string `json:"data"`
+// GetAccountRes 获取账户信息成功响应数据
+type GetAccountRes struct {
+	RemainCoins       string `json:"remainCoins"`
+	CurrentTaskCounts string `json:"currentTaskCounts"`
+	RemainMoney       string `json:"remainMoney"`
+	Currency          string `json:"currency"`
+	ApiType           string `json:"apiType"`
 }
 
-// 获取任务结果成功响应
-
-type RunningHubGetTaskResultSuccessResponseData struct {
-	PreviewUrl   string `json:"previewUrl"`
-	FileUrl      string `json:"fileUrl"`
-	FileType     string `json:"fileType"`
-	TaskCostTime string `json:"taskCostTime"`
-	TaskStatus   string `json:"taskStatus"`
+type GetTaskStatusAndResultRes struct {
+	Status       string                                `json:"status"`
+	Code         int                                   `json:"code"`
+	Msg          string                                `json:"msg"`
+	SuccessItems []*SuccessOfGetTaskResultResponseData `json:"success_items"`
+	FailedReason *FailedOfGetTaskResultResponseData    `json:"failed_reason"`
 }
 
-type RunningHubGetTaskResultFailedResponseData struct {
-	FailedReason map[string]map[string]string `json:"failedReason"`
+type GetTaskResultRes struct {
+	Code         int                                   `json:"code"`
+	Msg          string                                `json:"msg"`
+	SuccessItems []*SuccessOfGetTaskResultResponseData `json:"success_items"`
+	FailedReason *FailedOfGetTaskResultResponseData    `json:"failed_reason"`
+}
+
+// SuccessOfGetTaskResultResponseData 获取任务结果成功响应
+type SuccessOfGetTaskResultResponseData struct {
+	FileUrl                string  `json:"fileUrl"`
+	FileType               string  `json:"fileType"`
+	TaskCostTime           string  `json:"taskCostTime"`
+	NodeId                 string  `json:"nodeId"`
+	ThirdPartyConsumeMoney *string `json:"thirdPartyConsumeMoney"`
+	ConsumeMoney           string  `json:"consumeMoney"`
+	ConsumeCoins           *string `json:"consumeCoins"`
+}
+
+// FailedOfGetTaskResultResponseData 获取任务结果失败响应
+type FailedOfGetTaskResultResponseData struct {
+	FailedReason struct {
+		CurrentOutputs   string `json:"current_outputs"`
+		ExceptionType    string `json:"exception_type"`
+		CurrentInputs    string `json:"current_inputs"`
+		TraceBack        string `json:"traceback"`
+		NodeId           string `json:"node_id"`
+		ExceptionMessage string `json:"exception_message"`
+	} `json:"failedReason"`
 }
