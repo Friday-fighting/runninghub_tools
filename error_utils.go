@@ -147,6 +147,7 @@ var errorInfoMap = map[int]errorInfo{
 func GetErrorInfo(code int, failReason *FailedOfGetTaskResultResponseData) (res *ErrorInfo) {
 	res = &ErrorInfo{
 		Code:         code,
+		SubCode:      code,
 		FailedReason: failReason.FailedReason,
 	}
 	if code == 805 {
