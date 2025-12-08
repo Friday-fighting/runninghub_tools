@@ -47,8 +47,9 @@ type GetAccountRes struct {
 }
 
 type GetTaskStatusAndResultReq struct {
-	TaskId   string `json:"taskId"`
-	MaxTries int    `json:"maxTries"`
+	TaskId    string
+	MaxTries  int
+	SleepTime int
 }
 
 type GetTaskStatusAndResultRes struct {

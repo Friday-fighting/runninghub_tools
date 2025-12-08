@@ -203,6 +203,11 @@ func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTa
 		if in.MaxTries <= 0 {
 			in.MaxTries = 5
 		}
+		if in.SleepTime <= 0 {
+			in.SleepTime = 10
+		} else if in.SleepTime >= 60 {
+			in.SleepTime = 60
+		}
 		for i := 0; i < in.MaxTries; i++ {
 			result, err = c.GetTaskResult(ctx, in.TaskId)
 			if err == nil && result != nil {
@@ -212,6 +217,7 @@ func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTa
 				res.FailedReason = result.FailedReason
 				return res, nil
 			}
+			time.Sleep(time.Duration(in.SleepTime) * time.Second)
 		}
 	}
 	return res, nil
