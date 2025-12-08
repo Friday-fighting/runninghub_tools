@@ -185,12 +185,12 @@ func (c *RunningHubClient) CancelTask(ctx context.Context, taskId string) (err e
 	return nil
 }
 
-// GetTaskStatusAndResult 获取任务状态和结果
-func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, taskId string, maxTries int) (res *GetTaskStatusAndResultRes, err error) {
-	if taskId == "" {
+// GetTaskStatusAndResult 获取任务状态和结果, 支持获取结果时重试
+func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTaskStatusAndResultReq) (res *GetTaskStatusAndResultRes, err error) {
+	if in.TaskId == "" {
 		return nil, gerror.New("task_id cannot be empty")
 	}
-	status, err := c.GetTaskStatus(ctx, taskId)
+	status, err := c.GetTaskStatus(ctx, in.TaskId)
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +200,11 @@ func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, taskId st
 	switch status {
 	case "SUCCESS", "FAILED":
 		var result *GetTaskResultRes
-		for i := 0; i < maxTries; i++ {
-			result, err = c.GetTaskResult(ctx, taskId)
+		if in.MaxTries <= 0 {
+			in.MaxTries = 5
+		}
+		for i := 0; i < in.MaxTries; i++ {
+			result, err = c.GetTaskResult(ctx, in.TaskId)
 			if err == nil && result != nil {
 				res.Code = result.Code
 				res.Msg = result.Msg

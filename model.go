@@ -46,6 +46,11 @@ type GetAccountRes struct {
 	ApiType           string `json:"apiType"`
 }
 
+type GetTaskStatusAndResultReq struct {
+	TaskId   string `json:"taskId"`
+	MaxTries int    `json:"maxTries"`
+}
+
 type GetTaskStatusAndResultRes struct {
 	Status       string                                `json:"status"`
 	Code         int                                   `json:"code"`
