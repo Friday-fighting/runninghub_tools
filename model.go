@@ -80,12 +80,14 @@ type SuccessOfGetTaskResultResponseData struct {
 
 // FailedOfGetTaskResultResponseData 获取任务结果失败响应
 type FailedOfGetTaskResultResponseData struct {
-	FailedReason struct {
-		CurrentOutputs   string `json:"current_outputs"`
-		ExceptionType    string `json:"exception_type"`
-		CurrentInputs    string `json:"current_inputs"`
-		TraceBack        string `json:"traceback"`
-		NodeId           string `json:"node_id"`
-		ExceptionMessage string `json:"exception_message"`
-	} `json:"failedReason"`
+	FailedReason *FailedReason `json:"failedReason"`
+}
+
+type FailedReason struct {
+	CurrentOutputs   string `json:"current_outputs"`
+	ExceptionType    string `json:"exception_type"`
+	CurrentInputs    string `json:"current_inputs"`
+	TraceBack        string `json:"traceback"`
+	NodeId           string `json:"node_id"`
+	ExceptionMessage string `json:"exception_message"`
 }
