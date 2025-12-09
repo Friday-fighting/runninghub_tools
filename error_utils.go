@@ -144,29 +144,28 @@ var errorInfoMap = map[int]errorInfo{
 	},
 }
 
-func GetErrorInfo(code int, failReason *FailedReason) (res *ErrorInfo) {
+func GetErrorInfo(code int, msg string, failReason *FailedReason) (res *ErrorInfo) {
+	if failReason == nil {
+		return nil
+	}
 	res = &ErrorInfo{
 		Code:         code,
+		Msg:          msg,
 		SubCode:      code,
 		FailedReason: failReason,
-	}
-	if code == 805 {
-		res.Msg = "任务状态异常"
-		res.Sign = "APIKEY_TASK_STATUS_ERROR"
-		if strings.Contains(res.FailedReason.ExceptionMessage, "Porn") {
-			res.SubCode = 805001
-			return res
-		}
-		if strings.Contains(res.FailedReason.ExceptionMessage, "显存告警") {
-			res.SubCode = 805002
-			return res
-		}
-		res.SubCode = 805000
-		return res
 	}
 	if value, ok := errorInfoMap[code]; ok {
 		res.Sign = value.Sign
 		res.Msg = value.Msg
+		if code == 805 {
+			res.SubCode = 805000
+			if strings.Contains(res.FailedReason.ExceptionMessage, "Porn") {
+				res.SubCode = 805001
+			}
+			if strings.Contains(res.FailedReason.ExceptionMessage, "显存告警") {
+				res.SubCode = 805002
+			}
+		}
 		return res
 	}
 	res.Msg = failReason.TraceBack

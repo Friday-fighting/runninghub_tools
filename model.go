@@ -30,6 +30,8 @@ type NodeInfo struct {
 }
 
 type CreateTaskRes struct {
+	Code       int    `json:"code"`
+	Msg        string `json:"msg"`
 	NetWssUrl  string `json:"netWssUrl"`
 	TaskId     string `json:"taskId"`
 	TaskStatus string `json:"taskStatus"`

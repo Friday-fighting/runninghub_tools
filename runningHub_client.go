@@ -97,12 +97,11 @@ func (c *RunningHubClient) CreateTask(ctx context.Context, payloadData *CreateTa
 	if err != nil {
 		return nil, err
 	}
-	if resp.Code != 0 {
-		return nil, gerror.Newf("CreateTask fail, code: %d, msg: %s", resp.Code, resp.Msg)
-	}
 	if err := json.Unmarshal(resp.Data, &res); err != nil {
 		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
+	res.Msg = resp.Msg
+	res.Code = resp.Code
 	return res, nil
 }
 
@@ -204,7 +203,7 @@ func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTa
 	res = &GetTaskStatusAndResultRes{
 		Status: status,
 	}
-	switch status {
+	switch res.Status {
 	case "SUCCESS", "FAILED":
 		var result *GetTaskResultRes
 		if in.MaxTries <= 0 {
