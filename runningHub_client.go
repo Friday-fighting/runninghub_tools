@@ -97,11 +97,15 @@ func (c *RunningHubClient) CreateTask(ctx context.Context, payloadData *CreateTa
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(resp.Data, &res); err != nil {
-		return nil, fmt.Errorf("decode success data fail: %w", err)
+	res = &CreateTaskRes{
+		Code: resp.Code,
+		Msg:  resp.Msg,
 	}
-	res.Msg = resp.Msg
-	res.Code = resp.Code
+	if resp.Code == 0 {
+		if err := json.Unmarshal(resp.Data, &res); err != nil {
+			return nil, fmt.Errorf("decode success data fail: %w", err)
+		}
+	}
 	return res, nil
 }
 
