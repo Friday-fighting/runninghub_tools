@@ -164,6 +164,10 @@ func (c *RunningHubClient) GetTaskResult(ctx context.Context, taskId string) (re
 	if err := json.Unmarshal(resp.Data, &failData); err != nil {
 		return nil, fmt.Errorf("decode fail data fail: %w", err)
 	}
+	if failData.FailedReason.FailedReason == nil {
+		res.FailedReason = &FailedReason{}
+		return res, nil
+	}
 	res.FailedReason = &FailedReason{
 		CurrentOutputs:   failData.FailedReason.FailedReason.CurrentOutputs,
 		CurrentInputs:    failData.FailedReason.FailedReason.CurrentInputs,
