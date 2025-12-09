@@ -86,6 +86,7 @@ type FailedOfGetTaskResultResponseData struct {
 }
 
 type FailedReason struct {
+	OriginalInfo     string `json:"original_info"`
 	CurrentOutputs   string `json:"current_outputs"`
 	ExceptionType    string `json:"exception_type"`
 	CurrentInputs    string `json:"current_inputs"`

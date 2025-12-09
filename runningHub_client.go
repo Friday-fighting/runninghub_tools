@@ -159,22 +159,15 @@ func (c *RunningHubClient) GetTaskResult(ctx context.Context, taskId string) (re
 		return res, nil
 	}
 	var failData struct {
-		FailedReason FailedOfGetTaskResultResponseData `json:"failedReason"`
+		FailedReason *FailedReason `json:"failedReason"`
 	}
+	res.FailedReason.OriginalInfo = string(resp.Data)
 	if err := json.Unmarshal(resp.Data, &failData); err != nil {
-		return nil, fmt.Errorf("decode fail data fail: %w", err)
-	}
-	if failData.FailedReason.FailedReason == nil {
-		res.FailedReason = &FailedReason{}
 		return res, nil
 	}
-	res.FailedReason = &FailedReason{
-		CurrentOutputs:   failData.FailedReason.FailedReason.CurrentOutputs,
-		CurrentInputs:    failData.FailedReason.FailedReason.CurrentInputs,
-		ExceptionMessage: failData.FailedReason.FailedReason.ExceptionMessage,
-		ExceptionType:    failData.FailedReason.FailedReason.ExceptionType,
-		NodeId:           failData.FailedReason.FailedReason.NodeId,
-		TraceBack:        failData.FailedReason.FailedReason.TraceBack,
+	if failData.FailedReason != nil {
+		failData.FailedReason.OriginalInfo = string(resp.Data)
+		res.FailedReason = failData.FailedReason
 	}
 	return res, nil
 }
