@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Friday-fighting/runninghub_tools/runninghub_client"
 	"os"
 	"path/filepath"
 	"strings"

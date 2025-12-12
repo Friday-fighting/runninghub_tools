@@ -1,4 +1,4 @@
-package runninghub_client
+package runninghub_client_utils
 
 import "encoding/json"
 

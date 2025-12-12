@@ -1,4 +1,4 @@
-package runninghub_tools
+package runninghub_client_utils
 
 import "strings"
 

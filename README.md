@@ -9,26 +9,27 @@ go get github.com/Friday-fighting/runninghub_tools@latest
 ```
 
 ## use
+
 ```go
 package main
 
 import (
-    "github.com/Friday-fighting/runninghub_tools/runninghub_client"
+	"github.com/Friday-fighting/runninghub_tools/runninghub_client_utils"
 	"context"
 	"fmt"
 )
 
 func main() {
-    ctx := context.Background()
-    const apiKey = "your api key"
-    client := runninghub_client.NewClient(&runninghub_client.RunningHubClientConfig{
-        ApiKey: apiKey,
-    })
-    info, err := client.GetAccountInfo(ctx)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(info)
+	ctx := context.Background()
+	const apiKey = "your api key"
+	client := runninghub_client.NewClient(&runninghub_client.RunningHubClientConfig{
+		ApiKey: apiKey,
+	})
+	info, err := client.GetAccountInfo(ctx)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(info)
 }
 
 ```
