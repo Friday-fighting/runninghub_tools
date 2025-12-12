@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	runninghubClientUtil "github.com/Friday-fighting/runninghub_tools/runninghub_client_utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 type DownloadWorkflowJSONInput struct {
 	WorkflowId string
-	Client     *runninghub_client.RunningHubClient
+	Client     *runninghubClientUtil.RunningHubClient
 	SaveDir    string
 	FileName   string
 }
