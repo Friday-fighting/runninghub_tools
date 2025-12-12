@@ -1,24 +1,24 @@
-package runninghub_tools
+package runninghub_client
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"time"
-
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/gclient"
+	"log"
+	"net/http"
+	"time"
 )
 
 const (
-	getAccountStatus = "/uc/openapi/accountStatus"
-	getTaskStatus    = "/task/openapi/status"
-	createTask       = "/task/openapi/create"
-	getTaskResult    = "/task/openapi/outputs"
-	cancelTask       = "/task/openapi/cancel"
+	getAccountInfo  = "/uc/openapi/accountStatus"
+	getTaskStatus   = "/task/openapi/status"
+	createTask      = "/task/openapi/create"
+	getTaskResult   = "/task/openapi/outputs"
+	cancelTask      = "/task/openapi/cancel"
+	getWorkflowJSON = "/api/openapi/getJsonApiFormat"
 )
 
 type RunningHubClient struct {
@@ -65,9 +65,9 @@ func (c *RunningHubClient) doPost(ctx context.Context, url string, reqBody []byt
 	return response, nil
 }
 
-// GetAccountStatus 获取api账户信息
-func (c *RunningHubClient) GetAccountStatus(ctx context.Context) (res *GetAccountRes, err error) {
-	url := fmt.Sprintf("%s%s", c.url, getAccountStatus)
+// GetAccountInfo 获取api账户信息
+func (c *RunningHubClient) GetAccountInfo(ctx context.Context) (res *GetAccountRes, err error) {
+	url := fmt.Sprintf("%s%s", c.url, getAccountInfo)
 	reqBody, _ := json.Marshal(g.Map{
 		"apikey": c.ApiKey,
 	})
@@ -226,6 +226,40 @@ func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTa
 			}
 			time.Sleep(time.Duration(in.SleepTime) * time.Second)
 		}
+	}
+	return res, nil
+}
+
+// GetWorkflowJSON 获取工作流JSON
+func (c *RunningHubClient) GetWorkflowJSON(ctx context.Context, workflowId string) (res *GetWorkflowJSONRes, err error) {
+	if workflowId == "" {
+		return nil, gerror.New("workflowId cannot be empty")
+	}
+	url := fmt.Sprintf("%s%s", c.url, getWorkflowJSON)
+	reqBody, _ := json.Marshal(g.Map{
+		"workflowId": workflowId,
+		"apiKey":     c.ApiKey,
+	})
+	resp, err := c.doPost(ctx, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	res = &GetWorkflowJSONRes{
+		WorkflowData: make(map[string]WorkflowJSONNodeInfo),
+		Code:         resp.Code,
+		Msg:          resp.Msg,
+	}
+	var data struct {
+		Prompt string `json:"prompt"`
+	}
+	if resp.Code == 0 {
+		if err := json.Unmarshal(resp.Data, &data); err != nil {
+			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
+		}
+		if err := json.Unmarshal([]byte(data.Prompt), &res.WorkflowData); err != nil {
+			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
+		}
+
 	}
 	return res, nil
 }

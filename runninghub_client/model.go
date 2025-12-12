@@ -1,4 +1,4 @@
-package runninghub_tools
+package runninghub_client
 
 import "encoding/json"
 
@@ -93,4 +93,17 @@ type FailedReason struct {
 	TraceBack        string `json:"traceback"`
 	NodeId           string `json:"node_id"`
 	ExceptionMessage string `json:"exception_message"`
+}
+
+// GetWorkflowJSONRes 获取工作流JSON
+type GetWorkflowJSONRes struct {
+	Code         int                             `json:"code"`
+	Msg          string                          `json:"msg"`
+	WorkflowData map[string]WorkflowJSONNodeInfo `json:"workflow_data"`
+}
+
+type WorkflowJSONNodeInfo struct {
+	ClassType string                 `json:"class_type"`
+	Inputs    map[string]interface{} `json:"inputs"`
+	Meta      map[string]string      `json:"_meta"`
 }
