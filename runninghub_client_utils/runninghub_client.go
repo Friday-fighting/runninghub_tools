@@ -3,12 +3,18 @@ package runninghub_client_utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/Friday-fighting/runninghub_tools/utility"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/gclient"
+	"github.com/gogf/gf/v2/os/gfile"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -19,12 +25,14 @@ const (
 	getTaskResult   = "/task/openapi/outputs"
 	cancelTask      = "/task/openapi/cancel"
 	getWorkflowJSON = "/api/openapi/getJsonApiFormat"
+	uploadResource  = "/task/openapi/upload"
 )
 
 type RunningHubClient struct {
 	url        string
 	ApiKey     string `json:"api_key"`
 	httpClient *gclient.Client
+	Timeout    time.Duration
 }
 
 func NewClient(in *RunningHubClientConfig) *RunningHubClient {
@@ -35,12 +43,16 @@ func NewClient(in *RunningHubClientConfig) *RunningHubClient {
 	if in.UseHttpReq {
 		protocol = "http"
 	}
+	if in.Timeout <= 0 {
+		in.Timeout = 60
+	}
 	url := fmt.Sprintf("%s://%s", protocol, in.Host)
 	return &RunningHubClient{
-		ApiKey: in.ApiKey,
-		url:    url,
+		ApiKey:  in.ApiKey,
+		Timeout: in.Timeout,
+		url:     url,
 		httpClient: g.Client().
-			SetTimeout(60*time.Second).
+			SetTimeout(in.Timeout*time.Second).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Host", in.Host),
 	}
@@ -260,6 +272,104 @@ func (c *RunningHubClient) GetWorkflowJSON(ctx context.Context, workflowId strin
 			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
 		}
 
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) DownloadWorkflowJsonData(ctx context.Context, in *DownloadWorkflowJSONInput) (filePath string, err error) {
+	if in.WorkflowId == "" || in.Client == nil {
+		return "", nil
+	}
+	if in.SaveDir == "" {
+		cacheFilePath := filepath.Join("temp", "cacheWorkflowJson")
+		os.MkdirAll(cacheFilePath, os.ModePerm)
+		in.SaveDir = cacheFilePath
+	}
+	if in.FileName == "" {
+		in.FileName = fmt.Sprintf("workflow_%s.json", in.WorkflowId)
+	}
+	if !strings.HasSuffix(in.FileName, ".json") {
+		in.FileName = fmt.Sprintf("%s.json", in.FileName)
+	}
+	filePath = filepath.Join(in.SaveDir, in.FileName)
+	_, err = os.Stat(filePath)
+	if !errors.Is(err, os.ErrNotExist) {
+		fmt.Println("file already exists, skipping download")
+		return filePath, nil
+	}
+	result, err := in.Client.GetWorkflowJSON(ctx, in.WorkflowId)
+	if err != nil {
+		return "", err
+	}
+	if result.Code != 0 {
+		return "", errors.New(result.Msg)
+	}
+	out, err := json.MarshalIndent(result.WorkflowData, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	err = os.WriteFile(filePath, out, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+	return filePath, nil
+}
+
+func (c *RunningHubClient) UploadResourceWithURl(ctx context.Context, url string) (res *UploadResourceRes, err error) {
+	saveFilePath, err := utility.DownloadFromUrl(url, "")
+	if err != nil {
+		return nil, fmt.Errorf("download file fail: %w", err)
+	}
+	defer os.Remove(saveFilePath)
+	res, err = c.UploadResource(ctx, saveFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("upload resource fail: %w", err)
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) UploadResource(ctx context.Context, filePath string) (res *UploadResourceRes, err error) {
+	if !gfile.IsFile(filePath) {
+		return nil, errors.New("the filePath does not point to a file")
+	}
+	url := fmt.Sprintf("%s%s", c.url, uploadResource)
+	body := g.Client().
+		SetTimeout(c.Timeout*time.Second).
+		PostContent(ctx, url, g.Map{
+			"apiKey":   c.ApiKey,
+			"file":     "@file:" + filePath,
+			"fileType": "input",
+		})
+	var response *RunningHubResponse
+	if err = json.Unmarshal([]byte(body), &response); err != nil {
+		return nil, err
+	}
+	if response.Code != 0 {
+		return nil, gerror.Newf("UploadResource fail, code: %d, msg: %s", response.Code, response.Msg)
+	}
+	if err := json.Unmarshal(response.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) ParseWorkflowPictureInputNode(ctx context.Context, workflowId string) (res []*WorkflowNodeInfo, err error) {
+	res = []*WorkflowNodeInfo{}
+	result, err := c.GetWorkflowJSON(ctx, workflowId)
+	if err != nil {
+		return nil, err
+	}
+	if result.Code != 0 {
+		return nil, errors.New(result.Msg)
+	}
+	for nodeId, v := range result.WorkflowData {
+		if ok, nodeInfo := JudgeRunningHubWorkflowNodeIsPictureInputNode(v.ClassType); ok {
+			res = append(res, &WorkflowNodeInfo{
+				NodeId:    nodeId,
+				NodeType:  nodeInfo.NodeType,
+				FieldName: nodeInfo.FieldName,
+			})
+		}
 	}
 	return res, nil
 }

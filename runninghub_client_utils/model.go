@@ -1,11 +1,15 @@
 package runninghub_client_utils
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type RunningHubClientConfig struct {
 	UseHttpReq bool   `json:"use_http_req"`
 	Host       string `json:"host"`
 	ApiKey     string `json:"api_key"`
+	Timeout    time.Duration
 }
 
 // RunningHubResponse RunningHub 通用响应结构
@@ -106,4 +110,29 @@ type WorkflowJSONNodeInfo struct {
 	ClassType string                 `json:"class_type"`
 	Inputs    map[string]interface{} `json:"inputs"`
 	Meta      map[string]string      `json:"_meta"`
+}
+
+type FileSource struct {
+	UploadMode int    // 0: 内存 1: 文件 2: 链接
+	Path       string // 如果走文件
+	Bytes      []byte // 如果走内存
+	Url        string // 如果走链接
+}
+
+type UploadResourceRes struct {
+	FileName string `json:"fileName"`
+	FileType string `json:"fileType"`
+}
+
+type DownloadWorkflowJSONInput struct {
+	WorkflowId string
+	Client     *RunningHubClient
+	SaveDir    string
+	FileName   string
+}
+
+type WorkflowNodeInfo struct {
+	NodeType  string `json:"nodeType"`
+	NodeId    string `json:"nodeId"`
+	FieldName string `json:"fieldName"`
 }
