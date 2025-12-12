@@ -10,6 +10,7 @@ import (
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/gclient"
 	"github.com/gogf/gf/v2/os/gfile"
+	"github.com/gogf/gf/v2/util/gconv"
 	"log"
 	"net/http"
 	"os"
@@ -271,7 +272,6 @@ func (c *RunningHubClient) GetWorkflowJSON(ctx context.Context, workflowId strin
 		if err := json.Unmarshal([]byte(data.Prompt), &res.WorkflowData); err != nil {
 			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
 		}
-
 	}
 	return res, nil
 }
@@ -353,8 +353,8 @@ func (c *RunningHubClient) UploadResource(ctx context.Context, filePath string) 
 	return res, nil
 }
 
-func (c *RunningHubClient) ParseWorkflowPictureInputNode(ctx context.Context, workflowId string) (res []*WorkflowNodeInfo, err error) {
-	res = []*WorkflowNodeInfo{}
+func (c *RunningHubClient) ParseWorkflowPictureInputNode(ctx context.Context, workflowId string) (res []WorkflowNodeInfo, err error) {
+	res = []WorkflowNodeInfo{}
 	result, err := c.GetWorkflowJSON(ctx, workflowId)
 	if err != nil {
 		return nil, err
@@ -362,13 +362,27 @@ func (c *RunningHubClient) ParseWorkflowPictureInputNode(ctx context.Context, wo
 	if result.Code != 0 {
 		return nil, errors.New(result.Msg)
 	}
+	cacheUsedNode := make(map[int]struct{})
+	cacheData := make(map[string]*WorkflowNodeInfo)
 	for nodeId, v := range result.WorkflowData {
 		if ok, nodeInfo := JudgeRunningHubWorkflowNodeIsPictureInputNode(v.ClassType); ok {
-			res = append(res, &WorkflowNodeInfo{
+			cacheData[nodeId] = &WorkflowNodeInfo{
 				NodeId:    nodeId,
 				NodeType:  nodeInfo.NodeType,
 				FieldName: nodeInfo.FieldName,
-			})
+			}
+		}
+		for _, cacheV := range gconv.SliceInt(v.Inputs["image"]) {
+			if cacheV > 0 {
+				cacheUsedNode[cacheV] = struct{}{}
+			}
+		}
+	}
+	res = make([]WorkflowNodeInfo, 0, len(cacheData))
+	for nodeId, v := range cacheData {
+		nodeIdInt := gconv.Int(nodeId)
+		if _, ok := cacheUsedNode[nodeIdInt]; ok {
+			res = append(res, *v)
 		}
 	}
 	return res, nil
