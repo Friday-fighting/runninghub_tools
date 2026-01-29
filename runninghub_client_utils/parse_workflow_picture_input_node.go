@@ -82,7 +82,7 @@ var RunningHubWorkflowPictureInputNodeInfo = map[string]NodeMeta{
 	// 从 URL 加载图像节点
 	"LoadImageFromUrl": {
 		ClassType: "LoadImageFromUrl",
-		FieldName: "image",
+		FieldName: "url",
 		NodeType:  "url",
 	},
 	"LoadImageAsMaskFromUrl": {
