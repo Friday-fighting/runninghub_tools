@@ -16,7 +16,7 @@ type RunningHubClientConfig struct {
 type RunningHubResponse struct {
 	Code          int             `json:"code"`
 	Msg           string          `json:"msg"`
-	ErrorMessages interface{}     `json:"errorMessages"`
+	ErrorMessages json.RawMessage `json:"errorMessages"`
 	Data          json.RawMessage `json:"data"`
 }
 

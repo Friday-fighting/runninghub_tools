@@ -1,6 +1,7 @@
 package runninghub_client_utils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -82,6 +83,14 @@ func (c *RunningHubClient) doPost(ctx context.Context, url string, reqBody []byt
 	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
+	respData := response.Data
+	if len(respData) == 0 || bytes.Equal(respData, []byte("null")) {
+		response.Data = nil
+	}
+	errorMessages := response.ErrorMessages
+	if len(errorMessages) == 0 || bytes.Equal(errorMessages, []byte("null")) {
+		response.ErrorMessages = nil
+	}
 	return response, nil
 }
 
@@ -95,7 +104,7 @@ func (c *RunningHubClient) GetAccountInfo(ctx context.Context) (res *GetAccountR
 	if err != nil {
 		return nil, err
 	}
-	if resp.Code != 0 {
+	if resp.Code != 0 || resp.Data == nil {
 		return nil, gerror.Newf("GetAccountStatus fail, code: %d, msg: %s", resp.Code, resp.Msg)
 	}
 	if err := json.Unmarshal(resp.Data, &res); err != nil {
@@ -117,14 +126,15 @@ func (c *RunningHubClient) CreateTask(ctx context.Context, payloadData *CreateTa
 	if err != nil {
 		return nil, err
 	}
+	if resp.Code != 0 || resp.Data == nil {
+		return nil, gerror.Newf("CreateTask fail, resp: %+v", resp)
+	}
 	res = &CreateTaskRes{
 		Code: resp.Code,
 		Msg:  resp.Msg,
 	}
-	if resp.Code == 0 {
-		if err := json.Unmarshal(resp.Data, &res); err != nil {
-			return nil, fmt.Errorf("decode success data fail: %w", err)
-		}
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
 	return res, nil
 }
@@ -149,8 +159,10 @@ func (c *RunningHubClient) GetTaskStatus(ctx context.Context, taskId string) (re
 		ErrorMessages: resp.ErrorMessages,
 		Data:          "",
 	}
-	if err := json.Unmarshal(resp.Data, &res.Data); err != nil {
-		return nil, fmt.Errorf("decode success data fail: %w", err)
+	if resp.Data != nil {
+		if err := json.Unmarshal(resp.Data, &res.Data); err != nil {
+			return nil, fmt.Errorf("decode success data fail: %w", err)
+		}
 	}
 	return res, nil
 }
@@ -169,28 +181,30 @@ func (c *RunningHubClient) GetTaskResult(ctx context.Context, taskId string) (re
 	if err != nil {
 		return nil, err
 	}
+	respData := resp.Data
 	res = &GetTaskResultRes{
 		SuccessItems: []*SuccessOfGetTaskResultResponseData{},
-		FailedReason: &FailedReason{},
-		Code:         resp.Code,
-		Msg:          resp.Msg,
+		FailedReason: &FailedReason{
+			OriginalInfo: string(respData),
+		},
+		Code: resp.Code,
+		Msg:  resp.Msg,
 	}
 	if resp.Code == 0 {
-		if err := json.Unmarshal(resp.Data, &res.SuccessItems); err != nil {
+		if err := json.Unmarshal(respData, &res.SuccessItems); err != nil {
 			return nil, fmt.Errorf("decode success data fail: %w", err)
 		}
 		return res, nil
 	}
-	if resp.Data != nil {
+	if respData != nil {
 		var failData struct {
 			FailedReason *FailedReason `json:"failedReason"`
 		}
-		res.FailedReason.OriginalInfo = string(resp.Data)
-		if err := json.Unmarshal(resp.Data, &failData); err != nil {
+		if err := json.Unmarshal(respData, &failData); err != nil {
 			return res, nil
 		}
 		if failData.FailedReason != nil {
-			failData.FailedReason.OriginalInfo = string(resp.Data)
+			failData.FailedReason.OriginalInfo = string(respData)
 			res.FailedReason = failData.FailedReason
 		}
 	}
@@ -212,7 +226,7 @@ func (c *RunningHubClient) CancelTask(ctx context.Context, taskId string) (err e
 		return err
 	}
 	if resp.Code != 0 {
-		return gerror.Newf("CancelTask fail, code: %d, msg: %s", resp.Code, resp.Msg)
+		return gerror.Newf("CancelTask fail, resp: %+v", resp)
 	}
 	return nil
 }
@@ -287,8 +301,10 @@ func (c *RunningHubClient) GetWorkflowJSON(ctx context.Context, workflowId strin
 		Prompt string `json:"prompt"`
 	}
 	if resp.Code == 0 {
-		if err := json.Unmarshal(resp.Data, &data); err != nil {
-			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
+		if resp.Data != nil {
+			if err := json.Unmarshal(resp.Data, &data); err != nil {
+				return nil, fmt.Errorf("decode success prompt string fail: %w", err)
+			}
 		}
 		if err := json.Unmarshal([]byte(data.Prompt), &res.WorkflowData); err != nil {
 			return nil, fmt.Errorf("decode success prompt string fail: %w", err)
