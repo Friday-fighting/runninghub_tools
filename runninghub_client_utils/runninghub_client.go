@@ -29,6 +29,13 @@ const (
 	uploadResource  = "/task/openapi/upload"
 )
 
+const (
+	TaskStatusSuccess = "SUCCESS"
+	TaskStatusFailed  = "FAILED"
+	TaskStatusRunning = "RUNNING"
+	TaskStatusQueued  = "QUEUED"
+)
+
 type RunningHubClient struct {
 	url        string
 	ApiKey     string `json:"api_key"`
@@ -123,9 +130,9 @@ func (c *RunningHubClient) CreateTask(ctx context.Context, payloadData *CreateTa
 }
 
 // GetTaskStatus 获取任务状态
-func (c *RunningHubClient) GetTaskStatus(ctx context.Context, taskId string) (res string, err error) {
+func (c *RunningHubClient) GetTaskStatus(ctx context.Context, taskId string) (res *GetTaskStatusRes, err error) {
 	if taskId == "" {
-		return "", gerror.New("task_id cannot be empty")
+		return nil, gerror.New("task_id cannot be empty")
 	}
 	url := fmt.Sprintf("%s%s", c.url, getTaskStatus)
 	reqBody, _ := json.Marshal(g.Map{
@@ -134,13 +141,16 @@ func (c *RunningHubClient) GetTaskStatus(ctx context.Context, taskId string) (re
 	})
 	resp, err := c.doPost(ctx, url, reqBody)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if resp.Code != 0 {
-		return "", gerror.Newf("GetTaskStatus fail, code: %d, msg: %s", resp.Code, resp.Msg)
+	res = &GetTaskStatusRes{
+		Code:          resp.Code,
+		Msg:           resp.Msg,
+		ErrorMessages: resp.ErrorMessages,
+		Data:          "",
 	}
-	if err := json.Unmarshal(resp.Data, &res); err != nil {
-		return "", fmt.Errorf("decode success data fail: %w", err)
+	if err := json.Unmarshal(resp.Data, &res.Data); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
 	return res, nil
 }
@@ -171,21 +181,23 @@ func (c *RunningHubClient) GetTaskResult(ctx context.Context, taskId string) (re
 		}
 		return res, nil
 	}
-	var failData struct {
-		FailedReason *FailedReason `json:"failedReason"`
-	}
-	res.FailedReason.OriginalInfo = string(resp.Data)
-	if err := json.Unmarshal(resp.Data, &failData); err != nil {
-		return res, nil
-	}
-	if failData.FailedReason != nil {
-		failData.FailedReason.OriginalInfo = string(resp.Data)
-		res.FailedReason = failData.FailedReason
+	if resp.Data != nil {
+		var failData struct {
+			FailedReason *FailedReason `json:"failedReason"`
+		}
+		res.FailedReason.OriginalInfo = string(resp.Data)
+		if err := json.Unmarshal(resp.Data, &failData); err != nil {
+			return res, nil
+		}
+		if failData.FailedReason != nil {
+			failData.FailedReason.OriginalInfo = string(resp.Data)
+			res.FailedReason = failData.FailedReason
+		}
 	}
 	return res, nil
 }
 
-// 取消任务
+// CancelTask 取消任务
 func (c *RunningHubClient) CancelTask(ctx context.Context, taskId string) (err error) {
 	if taskId == "" {
 		log.Fatal("task_id cannot be empty")
@@ -206,16 +218,25 @@ func (c *RunningHubClient) CancelTask(ctx context.Context, taskId string) (err e
 }
 
 // GetTaskStatusAndResult 获取任务状态和结果, 支持获取结果时重试
-func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, in *GetTaskStatusAndResultReq) (res *GetTaskStatusAndResultRes, err error) {
+func (c *RunningHubClient) GetTaskStatusAndResult(ctx context.Context, taskId string) (res *GetTaskStatusAndResultRes, err error) {
+	return c.GetTaskStatusAndResultWithRetry(ctx, &GetTaskStatusAndResultReqWithRetry{TaskId: taskId, MaxTries: 1, SleepTime: 1})
+}
+
+// GetTaskStatusAndResultWithRetry 获取任务状态和结果, 支持获取结果时重试
+func (c *RunningHubClient) GetTaskStatusAndResultWithRetry(ctx context.Context, in *GetTaskStatusAndResultReqWithRetry) (res *GetTaskStatusAndResultRes, err error) {
+	res = &GetTaskStatusAndResultRes{}
 	if in.TaskId == "" {
 		return nil, gerror.New("task_id cannot be empty")
 	}
-	status, err := c.GetTaskStatus(ctx, in.TaskId)
+	resp, err := c.GetTaskStatus(ctx, in.TaskId)
 	if err != nil {
 		return nil, err
 	}
-	res = &GetTaskStatusAndResultRes{
-		Status: status,
+	res.Code = resp.Code
+	res.Msg = resp.Msg
+	res.Status = strings.ToUpper(resp.Data)
+	if resp.Code != 0 {
+		res.Status = TaskStatusFailed
 	}
 	switch res.Status {
 	case "SUCCESS", "FAILED":

@@ -43,6 +43,13 @@ type CreateTaskRes struct {
 	PromptTips string `json:"promptTips"`
 }
 
+type GetTaskStatusRes struct {
+	Code          int         `json:"code"`
+	Msg           string      `json:"msg"`
+	ErrorMessages interface{} `json:"errorMessages"`
+	Data          string      `json:"data"`
+}
+
 // GetAccountRes 获取账户信息成功响应数据
 type GetAccountRes struct {
 	RemainCoins       string `json:"remainCoins"`
@@ -52,7 +59,7 @@ type GetAccountRes struct {
 	ApiType           string `json:"apiType"`
 }
 
-type GetTaskStatusAndResultReq struct {
+type GetTaskStatusAndResultReqWithRetry struct {
 	TaskId    string
 	MaxTries  int
 	SleepTime int
