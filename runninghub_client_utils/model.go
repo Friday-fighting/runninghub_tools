@@ -131,6 +131,18 @@ type UploadResourceRes struct {
 	FileType string `json:"fileType"`
 }
 
+type UploadResourceV2Res struct {
+	Type        string `json:"type"`
+	DownloadUrl string `json:"download_url"`
+	FileName    string `json:"fileName"`
+	Size        string `json:"size"`
+}
+
+type UploadLoraFileRes struct {
+	FileName string `json:"fileName"`
+	Url      string `json:"url"`
+}
+
 type DownloadWorkflowJSONInput struct {
 	WorkflowId string
 	Client     *RunningHubClient

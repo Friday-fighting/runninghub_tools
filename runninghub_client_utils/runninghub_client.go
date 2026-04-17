@@ -12,7 +12,10 @@ import (
 	"github.com/gogf/gf/v2/net/gclient"
 	"github.com/gogf/gf/v2/os/gfile"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/google/uuid"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,13 +24,14 @@ import (
 )
 
 const (
-	getAccountInfo  = "/uc/openapi/accountStatus"
-	getTaskStatus   = "/task/openapi/status"
-	createTask      = "/task/openapi/create"
-	getTaskResult   = "/task/openapi/outputs"
-	cancelTask      = "/task/openapi/cancel"
-	getWorkflowJSON = "/api/openapi/getJsonApiFormat"
-	uploadResource  = "/task/openapi/upload"
+	getAccountInfo   = "/uc/openapi/accountStatus"
+	getTaskStatus    = "/task/openapi/status"
+	createTask       = "/task/openapi/create"
+	getTaskResult    = "/task/openapi/outputs"
+	cancelTask       = "/task/openapi/cancel"
+	getWorkflowJSON  = "/api/openapi/getJsonApiFormat"
+	uploadResource   = "/task/openapi/upload"
+	getLoraUploadUrl = "/api/openapi/getLoraUploadUrl"
 )
 
 const (
@@ -65,6 +69,85 @@ func NewClient(in *RunningHubClientConfig) *RunningHubClient {
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Host", in.Host),
 	}
+}
+
+func (c *RunningHubClient) doPostWithHeader(ctx context.Context, url string, header map[string]string, reqBody []byte) (res *RunningHubResponse, err error) {
+	httpClient := c.httpClient.Clone()
+	for k, v := range header {
+		httpClient = httpClient.SetHeader(k, v)
+	}
+	resp, err := httpClient.Post(ctx, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, gerror.Newf("unexpected status code: %d", resp.StatusCode)
+	}
+	var response *RunningHubResponse
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	respData := response.Data
+	if len(respData) == 0 || bytes.Equal(respData, []byte("null")) {
+		response.Data = nil
+	}
+	errorMessages := response.ErrorMessages
+	if len(errorMessages) == 0 || bytes.Equal(errorMessages, []byte("null")) {
+		response.ErrorMessages = nil
+	}
+	return response, nil
+}
+
+func (c *RunningHubClient) doPostContentWithHeader(ctx context.Context, url string, header map[string]string, payload *bytes.Buffer) (res *RunningHubResponse, err error) {
+	httpClient := c.httpClient.Clone()
+	for k, v := range header {
+		httpClient = httpClient.SetHeader(k, v)
+	}
+	resp, err := httpClient.Post(ctx, url, payload)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, gerror.Newf("unexpected status code: %d", resp.StatusCode)
+	}
+	var response *RunningHubResponse
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	respData := response.Data
+	if len(respData) == 0 || bytes.Equal(respData, []byte("null")) {
+		response.Data = nil
+	}
+	errorMessages := response.ErrorMessages
+	if len(errorMessages) == 0 || bytes.Equal(errorMessages, []byte("null")) {
+		response.ErrorMessages = nil
+	}
+	return response, nil
+}
+
+func (c *RunningHubClient) doPutWithHeader(ctx context.Context, url string, header map[string]string, payload *os.File) (err error) {
+	httpClient := c.httpClient.Clone()
+	for k, v := range header {
+		httpClient = httpClient.SetHeader(k, v)
+	}
+	resp, err := httpClient.Put(ctx, url, payload)
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return gerror.Newf("unexpected status code, respCode: %d, respBody: %v", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 func (c *RunningHubClient) doPost(ctx context.Context, url string, reqBody []byte) (res *RunningHubResponse, err error) {
@@ -421,6 +504,129 @@ func (c *RunningHubClient) ParseWorkflowPictureInputNode(ctx context.Context, wo
 		if _, ok := cacheUsedNode[nodeIdInt]; ok {
 			res = append(res, *v)
 		}
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) UploadResourceV2(ctx context.Context, filePath string) (res *UploadResourceV2Res, err error) {
+	if !gfile.IsFile(filePath) {
+		return nil, errors.New("the filePath does not point to a file")
+	}
+	url := fmt.Sprintf("%s%s", c.url, uploadResource)
+
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+	file, errFile1 := os.Open(filePath)
+	defer file.Close()
+	part1, errFile1 := writer.CreateFormFile("file", filepath.Base(""))
+	_, errFile1 = io.Copy(part1, file)
+	if errFile1 != nil {
+		return nil, err
+	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	header := map[string]string{
+		"Content-Type":  writer.FormDataContentType(),
+		"Host":          "www.runninghub.cn",
+		"Authorization": "Bearer " + c.ApiKey,
+	}
+	resp, err := c.doPostContentWithHeader(ctx, url, header, payload)
+	if resp == nil || resp.Data == nil {
+		return nil, fmt.Errorf("error resp: %+v", resp)
+	}
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) GetLoraUploadUrl(ctx context.Context, loraName string, md5Hex string) (res *UploadLoraFileRes, err error) {
+	url := fmt.Sprintf("%s%s", c.url, getLoraUploadUrl)
+	header := map[string]string{
+		"Content-Type":  "application/json",
+		"Host":          "www.runninghub.cn",
+		"Authorization": "Bearer " + c.ApiKey,
+	}
+	reqBody, _ := json.Marshal(g.Map{
+		"apiKey":   c.ApiKey,
+		"loraName": loraName,
+		"md5Hex":   md5Hex,
+	})
+	resp, err := c.doPostWithHeader(ctx, url, header, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Data == nil {
+		return nil, fmt.Errorf("error resp: %+v", resp)
+	}
+	if err := json.Unmarshal(resp.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) GetLoraUploadUrlDefine(ctx context.Context, loraName string, md5Hex string) (res *UploadLoraFileRes, err error) {
+	url := fmt.Sprintf("%s%s", c.url, getLoraUploadUrl)
+	body := g.Client().
+		SetTimeout(c.Timeout*time.Second).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Host", "www.runninghub.cn").
+		SetHeader("Authorization", "Bearer "+c.ApiKey).
+		PostContent(ctx, url, g.Map{
+			"apiKey":   c.ApiKey,
+			"loraName": loraName,
+			"md5Hex":   md5Hex,
+		})
+	var response *RunningHubResponse
+	if err = json.Unmarshal([]byte(body), &response); err != nil {
+		return nil, err
+	}
+	if response.Code != 0 {
+		return nil, gerror.Newf("UploadResource fail, code: %d, msg: %s", response.Code, response.Msg)
+	}
+	if err := json.Unmarshal(response.Data, &res); err != nil {
+		return nil, fmt.Errorf("decode success data fail: %w", err)
+	}
+	return res, nil
+}
+
+func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, filePath string) (res *UploadLoraFileRes, err error) {
+	if !gfile.IsFile(filePath) {
+		return nil, gerror.Newf("filePath(%s) does not point to a file", filePath)
+	}
+	if key == "" {
+		return nil, gerror.New("key must be not empty")
+	}
+	for _, c := range key {
+		if !(c >= 'a' && c <= 'z' ||
+			c >= 'A' && c <= 'Z' ||
+			c >= '0' && c <= '9') {
+			return nil, gerror.Newf("key must be in a-z or A-Z or 0-9。")
+		}
+	}
+	mdxHex, err := utility.GetLocalFileMd5Hex(filePath)
+	if err != nil {
+		return nil, err
+	}
+	loraName := fmt.Sprintf("%s_%x", key, uuid.New())
+	res, err = c.GetLoraUploadUrl(ctx, loraName, mdxHex)
+	if err != nil {
+		return nil, err
+	}
+	// 打开文件
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	header := map[string]string{
+		"Content-Type": "application/octet-stream",
+	}
+	err = c.doPutWithHeader(ctx, res.Url, header, file)
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
