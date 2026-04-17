@@ -12,7 +12,6 @@ import (
 	"github.com/gogf/gf/v2/net/gclient"
 	"github.com/gogf/gf/v2/os/gfile"
 	"github.com/gogf/gf/v2/util/gconv"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"mime/multipart"
@@ -592,9 +591,12 @@ func (c *RunningHubClient) GetLoraUploadUrlDefine(ctx context.Context, loraName 
 	return res, nil
 }
 
-func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, filePath string) (res *UploadLoraFileRes, err error) {
+func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, md5Hex string, filePath string) (res *UploadLoraFileRes, err error) {
 	if !gfile.IsFile(filePath) {
 		return nil, gerror.Newf("filePath(%s) does not point to a file", filePath)
+	}
+	if md5Hex == "" {
+		return nil, gerror.Newf("md5Hex must be not empty")
 	}
 	if key == "" {
 		return nil, gerror.New("key must be not empty")
@@ -603,15 +605,10 @@ func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, fileP
 		if !(c >= 'a' && c <= 'z' ||
 			c >= 'A' && c <= 'Z' ||
 			c >= '0' && c <= '9') {
-			return nil, gerror.Newf("key must be in a-z or A-Z or 0-9。")
+			return nil, gerror.Newf("key(%s) must be in a-z or A-Z or 0-9。", key)
 		}
 	}
-	mdxHex, err := utility.GetLocalFileMd5Hex(filePath)
-	if err != nil {
-		return nil, err
-	}
-	loraName := fmt.Sprintf("%s_%x", key, uuid.New())
-	res, err = c.GetLoraUploadUrl(ctx, loraName, mdxHex)
+	res, err = c.GetLoraUploadUrl(ctx, key, md5Hex)
 	if err != nil {
 		return nil, err
 	}
