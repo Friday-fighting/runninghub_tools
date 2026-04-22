@@ -604,8 +604,9 @@ func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, md5He
 	for _, c := range key {
 		if !(c >= 'a' && c <= 'z' ||
 			c >= 'A' && c <= 'Z' ||
+			c == '_' ||
 			c >= '0' && c <= '9') {
-			return nil, gerror.Newf("key(%s) must be in a-z or A-Z or 0-9。", key)
+			return nil, gerror.Newf("key(%s) must be  a-z, A-Z, 0-9 or _", key)
 		}
 	}
 	res, err = c.GetLoraUploadUrl(ctx, key, md5Hex)
