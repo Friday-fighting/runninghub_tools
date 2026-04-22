@@ -131,7 +131,9 @@ func (c *RunningHubClient) doPostContentWithHeader(ctx context.Context, url stri
 }
 
 func (c *RunningHubClient) doPutWithHeader(ctx context.Context, url string, header map[string]string, payload *os.File) (err error) {
-	httpClient := c.httpClient.Clone()
+	httpClient := g.Client().
+		SetTimeout(0).
+		SetHeader("Authorization", "Bearer "+c.ApiKey)
 	for k, v := range header {
 		httpClient = httpClient.SetHeader(k, v)
 	}
