@@ -593,7 +593,18 @@ func (c *RunningHubClient) GetLoraUploadUrlDefine(ctx context.Context, loraName 
 	return res, nil
 }
 
-func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, md5Hex string, filePath string) (res *UploadLoraFileRes, err error) {
+func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, filePath string) (res *UploadLoraFileRes, err error) {
+	if !gfile.IsFile(filePath) {
+		return nil, gerror.Newf("filePath(%s) does not point to a file", filePath)
+	}
+	md5Hex, err := utility.GetLocalFileMd5Hex(filePath)
+	if err != nil {
+		return nil, gerror.Wrapf(err, "get file(%s) md5Hex error", filePath)
+	}
+	return c.UploadLoraFileWithMd5Hex(ctx, key, filePath, md5Hex)
+}
+
+func (c *RunningHubClient) UploadLoraFileWithMd5Hex(ctx context.Context, key string, filePath string, md5Hex string) (res *UploadLoraFileRes, err error) {
 	if !gfile.IsFile(filePath) {
 		return nil, gerror.Newf("filePath(%s) does not point to a file", filePath)
 	}
@@ -611,22 +622,69 @@ func (c *RunningHubClient) UploadLoraFile(ctx context.Context, key string, md5He
 			return nil, gerror.Newf("key(%s) must be  a-z, A-Z, 0-9 or _", key)
 		}
 	}
+
+	fmt.Printf("md5Hex: %s\n", md5Hex)
+
+	fmt.Printf("开始获取上传链接\n")
 	res, err = c.GetLoraUploadUrl(ctx, key, md5Hex)
 	if err != nil {
 		return nil, err
 	}
-	// 打开文件
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	header := map[string]string{
-		"Content-Type": "application/octet-stream",
-	}
-	err = c.doPutWithHeader(ctx, res.Url, header, file)
+	fmt.Printf("获取上传链接成功, fileName: %s, url: %s\n", res.FileName, res.Url)
+	fmt.Printf("开始上传文件\n")
+	err = c.UploadLoraFileByPUT(res.Url, filePath)
 	if err != nil {
 		return nil, err
 	}
 	return res, nil
+
+}
+
+// UploadLoraFileByPUT 使用 PUT 方法上传本地文件到指定的预签名 URL
+func (c *RunningHubClient) UploadLoraFileByPUT(uploadURL string, filePath string) error {
+	// 打开本地文件
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer file.Close()
+
+	// 获取文件信息（可选，仅用于设置 Content-Length）
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("获取文件信息失败: %w", err)
+	}
+
+	// 创建 PUT 请求
+	req, err := http.NewRequest(http.MethodPut, uploadURL, file)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	// 设置请求头
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.ContentLength = fileInfo.Size()
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("上传请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应内容
+	respBody, _ := io.ReadAll(resp.Body)
+
+	// 判断是否上传成功
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("上传失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
+	}
+
+	fmt.Println("上传成功")
+	if len(respBody) > 0 {
+		fmt.Println("响应内容:", string(respBody))
+	}
+
+	return nil
 }

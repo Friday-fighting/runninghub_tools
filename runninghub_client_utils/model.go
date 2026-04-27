@@ -141,6 +141,7 @@ type UploadResourceV2Res struct {
 type UploadLoraFileRes struct {
 	FileName string `json:"fileName"`
 	Url      string `json:"url"`
+	Md5Hex   string `json:"md5Hex"`
 }
 
 type DownloadWorkflowJSONInput struct {
