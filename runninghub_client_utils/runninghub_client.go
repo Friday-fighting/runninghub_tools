@@ -565,31 +565,7 @@ func (c *RunningHubClient) GetLoraUploadUrl(ctx context.Context, loraName string
 	if err := json.Unmarshal(resp.Data, &res); err != nil {
 		return nil, fmt.Errorf("decode success data fail: %w", err)
 	}
-	return res, nil
-}
-
-func (c *RunningHubClient) GetLoraUploadUrlDefine(ctx context.Context, loraName string, md5Hex string) (res *UploadLoraFileRes, err error) {
-	url := fmt.Sprintf("%s%s", c.url, getLoraUploadUrl)
-	body := g.Client().
-		SetTimeout(c.Timeout*time.Second).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Host", "www.runninghub.cn").
-		SetHeader("Authorization", "Bearer "+c.ApiKey).
-		PostContent(ctx, url, g.Map{
-			"apiKey":   c.ApiKey,
-			"loraName": loraName,
-			"md5Hex":   md5Hex,
-		})
-	var response *RunningHubResponse
-	if err = json.Unmarshal([]byte(body), &response); err != nil {
-		return nil, err
-	}
-	if response.Code != 0 {
-		return nil, gerror.Newf("UploadResource fail, code: %d, msg: %s", response.Code, response.Msg)
-	}
-	if err := json.Unmarshal(response.Data, &res); err != nil {
-		return nil, fmt.Errorf("decode success data fail: %w", err)
-	}
+	res.Md5Hex = md5Hex
 	return res, nil
 }
 
